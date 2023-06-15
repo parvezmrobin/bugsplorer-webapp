@@ -1,4 +1,5 @@
 import os.path
+from typing import Optional
 
 import torch
 from torch import nn, Tensor
@@ -72,7 +73,10 @@ class BugPredictionModel(nn.Module):
         self.max_file_length = max_file_length
 
     def get_roberta_vec(
-        self, source_tensor: Tensor, label_tensor: Tensor, output_attentions=False
+        self,
+        source_tensor: Tensor,
+        label_tensor: Optional[Tensor] = None,
+        output_attentions=False,
     ):
         token_encoder_outputs = []
         token_attentions = []
@@ -140,7 +144,7 @@ class BugPredictionModel(nn.Module):
     def forward(
         self,
         source_tensor: Tensor,
-        label_tensor: Tensor,
+        label_tensor: Optional[Tensor] = None,
         output_attentions: bool = False,
     ) -> tuple[torch.float32, torch.Tensor] | tuple[torch.float32, torch.Tensor, list]:
         assert (
