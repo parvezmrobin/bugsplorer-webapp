@@ -1,44 +1,51 @@
 <template>
-  <div class="container container-fluid">
+  <div class="container-fluid">
     <div class="row">
-      <div class="col">
-        <h1 class="mt-3 mb-5">Bugsplorer Web App</h1>
+      <div class="col pb-2">
+        <h1 class="py-3 text-center">
+          Bugsplorer Web App
+          <span
+            v-show="loading"
+            class="spinner-border text-primary fw-lighter"
+            style="--bs-spinner-border-width: 0.125em"
+            role="status"
+          >
+            <span class="visually-hidden">Loading...</span>
+          </span>
+        </h1>
       </div>
     </div>
-    <div class="row mb-3">
-      <label for="formFile" class="col-auto col-form-label">
-        Select a file
-      </label>
-      <div class="col-auto">
-        <input
-          id="formFile"
-          class="form-control"
-          type="file"
-          @input="readFileContent"
-        />
-      </div>
-      <div class="col-auto">
-        <div v-show="loading" class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
+    <div class="row border-top">
+      <div class="col col-3">
+        <div class="row mt-3">
+          <label for="formFile" class="col-auto col-form-label">
+            Select a file
+          </label>
+          <div class="col-auto">
+            <input
+              id="formFile"
+              class="form-control"
+              type="file"
+              @input="readFileContent"
+            />
+          </div>
         </div>
       </div>
-    </div>
-    <div class="row">
-      <div class="col">
+      <div class="col col-9 pe-0">
         <pre class="position-relative">
           <span
             v-for="(score, i) in defectPossibilities"
             :key="i"
-            class="d-block position-relative w-100"
+            class="d-block position-relative w-100 ps-2"
             style="height: 1.5em; left: 0; top: -.5em"
             :style="{
               backgroundColor: getBackgroundColor(score),
             }"
-          />
+          >{{(i+1).toString(10).padStart(3)}}</span>
           <code
             ref="fileContentEl"
             class="hljs position-absolute w-100"
-            :class="`language-${language}`"
+            :class="{[`language-${language}`]: true, 'border-start': fileContent.length}"
             style="left: 0; top: 0;"
           >{{ fileContent }}</code>
         </pre>
@@ -88,7 +95,9 @@ watch(fileContent, () => {
 
 async function updateDefectPossibilities() {
   loading.value = true;
-  defectPossibilities.value = [];
+  defectPossibilities.value = Array(fileContent.value.split("\n").length).fill(
+    0
+  );
   const response = await axios.post(
     "http://localhost:5000/api/explore",
     fileContent.value
@@ -105,14 +114,14 @@ function getBackgroundColor(score: number) {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 pre {
-  overflow: visible;
+  height: calc(100vh - 96px - 1px); // 96px title + 1px border
+  margin-bottom: 0;
 }
 
 .hljs {
   background: transparent;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding-left: 3em;
 }
 </style>
