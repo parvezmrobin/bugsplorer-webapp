@@ -36,10 +36,11 @@
           <span
             v-for="(score, i) in defectPossibilities"
             :key="i"
-            class="d-block position-relative w-100 ps-2"
-            style="height: 1.5em; left: 0; top: -.5em"
+            class="d-block position-absolute w-100 ps-2"
+            style="height: 1.5em; left: 0;"
             :style="{
               backgroundColor: getBackgroundColor(score),
+              top: `${i * 1.5 + 1}em`
             }"
           >{{(i+1).toString(10).padStart(3)}}</span>
           <code
@@ -48,6 +49,17 @@
             :class="{[`language-${language}`]: true, 'border-start': fileContent.length}"
             style="left: 0; top: 0;"
           >{{ fileContent }}</code>
+
+          <span
+            v-for="(score, i) in defectPossibilities"
+            :key="i"
+            class="d-block position-fixed"
+            style="width: 5px; right: 16px; border-width: 2px; border-style: solid"
+            :style="{
+              borderColor: getBackgroundColor(score),
+              top: `calc(${i / defectPossibilities.length * 100}% + 100px)`,
+            }"
+          />
         </pre>
       </div>
     </div>
