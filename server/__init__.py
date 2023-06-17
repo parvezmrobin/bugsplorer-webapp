@@ -14,39 +14,55 @@ tokenizer = model_class_of["roberta"].tokenizer.from_pretrained(
 )
 model_classes = model_class_of["roberta"]
 config = model_classes.config.from_pretrained("huggingface/CodeBERTa-small-v1")
-checkpoint = "./checkpoints/101.train-bugsplorer-defectors-line-random-w_100-gpu_2-b_16"
-print(f"Loading 'roberta' model from {checkpoint}")
+python_checkpoint = (
+    "./checkpoints/101.train-bugsplorer-defectors-line-random-w_100-gpu_2-b_16"
+)
+java_checkpoint = "./checkpoints/103.train-bugsplorer-linedp-line-time-w_100-gpu_2-b_16"
+print(f"Loading 'roberta' model from {python_checkpoint}")
 
 device = torch.device("cpu")
 MAX_FILE_LEN = 256
 MAX_LINE_LEN = 16
-model = BugPredictionModel(
-    pretrained_model_name=checkpoint,
-    config=config,
-    encoder_type="line",
-    is_checkpoint=True,
-    pad_token_id=tokenizer.pad_token_id,
-    model_type="roberta",
-    max_line_length=MAX_LINE_LEN,
-    max_file_length=MAX_FILE_LEN,
-    class_weight=torch.tensor(
-        [1, 100],
-        device=device,
-        dtype=torch.float32,
-    ),
-)
-model.to(device)
-model.eval()
+python_model, java_model = [
+    BugPredictionModel(
+        pretrained_model_name=checkpoint,
+        config=config,
+        encoder_type="line",
+        is_checkpoint=True,
+        pad_token_id=tokenizer.pad_token_id,
+        model_type="roberta",
+        max_line_length=MAX_LINE_LEN,
+        max_file_length=MAX_FILE_LEN,
+        class_weight=torch.tensor(
+            [1, 100],
+            device=device,
+            dtype=torch.float32,
+        ),
+    )
+    for checkpoint in [python_checkpoint, java_checkpoint]
+]
 
-model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+python_model.to(device)
+python_model.eval()
+
+java_model.to(device)
+java_model.eval()
+
+model_parameters = filter(lambda p: p.requires_grad, python_model.parameters())
 model_size = sum([np.prod(p.size()) for p in model_parameters])
-print(f"Finished loading model of size {int(model_size // 1e6)}M")
+print(f"Finished loading two models of size {int(model_size // 1e6)}M")
 
 
 @app.route("/api/explore", methods=["POST"])
 def hello_world():
     lines = request.get_data(as_text=True).replace(tokenizer.eos_token, "").split("\n")
+    lang = request.args.get("lang")
     line_token_ids = _tokenize_lines(lines)
+
+    model = python_model
+    if lang == "java":
+        model = java_model
+
     loss, logit = model(
         line_token_ids.to(device),
     )
