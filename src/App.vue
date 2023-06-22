@@ -111,7 +111,7 @@ async function updateDefectPossibilities() {
     0
   );
   const response = await axios.post(
-    "http://localhost:5000/api/explore",
+    `http://localhost:5000/api/explore?lang=${language.value}`,
     fileContent.value
   );
   defectPossibilities.value = response.data;

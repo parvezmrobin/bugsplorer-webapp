@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from flask import Flask, request
 from flask_cors import CORS
+from pympler.asizeof import asizeof
 
 from server.BugPredictionArgs import model_class_of
 from server.BugPredictionModel import BugPredictionModel
@@ -18,7 +19,7 @@ python_checkpoint = (
     "./checkpoints/101.train-bugsplorer-defectors-line-random-w_100-gpu_2-b_16"
 )
 java_checkpoint = "./checkpoints/103.train-bugsplorer-linedp-line-time-w_100-gpu_2-b_16"
-print(f"Loading 'roberta' model from {python_checkpoint}")
+print(f"Loading models from {python_checkpoint}, {java_checkpoint}")
 
 device = torch.device("cpu")
 MAX_FILE_LEN = 256
@@ -49,8 +50,11 @@ java_model.to(device)
 java_model.eval()
 
 model_parameters = filter(lambda p: p.requires_grad, python_model.parameters())
-model_size = sum([np.prod(p.size()) for p in model_parameters])
-print(f"Finished loading two models of size {int(model_size // 1e6)}M")
+param_count = sum([np.prod(p.size()) for p in model_parameters])
+model_size = asizeof(python_model)
+print(
+    f"Finished loading two models of size {int(param_count // 1e6)}M params ({model_size / 1e6:.2f}MB)"
+)
 
 
 @app.route("/api/explore", methods=["POST"])
