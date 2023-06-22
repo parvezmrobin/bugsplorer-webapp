@@ -1,3 +1,5 @@
+from typing import TypedDict, Tuple, TypeVar
+
 import numpy as np
 import torch
 from flask import Flask, request
@@ -57,33 +59,53 @@ print(
 )
 
 
+class Response(TypedDict):
+    defect_prob: list[float]
+    attention: list[list[float]]
+    offset: list[list[float]]
+
+
 @app.route("/api/explore", methods=["POST"])
 def hello_world():
     lines = request.get_data(as_text=True).replace(tokenizer.eos_token, "").split("\n")
     lang = request.args.get("lang")
-    line_token_ids = _tokenize_lines(lines)
+    line_token_ids, offsets = _tokenize_lines(lines)
 
     model = python_model
     if lang == "java":
         model = java_model
 
-    loss, logit = model(
+    loss, logit, attentions = model(
         line_token_ids.to(device),
+        output_attentions=-True,
+    )
+    attn_tensors = _compute_attn_for_tokens(attentions, len(line_token_ids))
+    attention_by_file: list[list[float]] = _discard_redundancy(
+        [attn.tolist() for attn in attn_tensors]
     )
     assert len(logit.shape) == 3
     true_prob = logit[:, :, 1].tolist()  # shape: (num_splits, num_files)
-    defect_prob = _get_defect_prob(true_prob)
-    return defect_prob[: len(lines)]
+    defect_prob = _discard_redundancy(true_prob)
+
+    return Response(
+        defect_prob=defect_prob[: len(lines)],
+        attention=attention_by_file[: len(lines)],
+        offset=offsets.tolist(),
+    )
 
 
-def _tokenize_lines(lines) -> torch.Tensor:
-    line_token_ids = tokenizer(
+def _tokenize_lines(lines) -> Tuple[torch.Tensor, torch.Tensor]:
+    tokenizer_response = tokenizer(
         lines,
         max_length=MAX_LINE_LEN,
         padding="max_length",
         truncation=True,
         return_tensors="pt",
-    )["input_ids"]
+        return_offsets_mapping=True,
+    )
+
+    line_token_ids = tokenizer_response["input_ids"]
+    offsets = tokenizer_response["offset_mapping"]
     # split line_token_ids into max_file_len chunks with 64 tokens overlap.
     # this is to avoid truncating lines in the middle of a function call.
     split_line_token_ids = []
@@ -108,10 +130,13 @@ def _tokenize_lines(lines) -> torch.Tensor:
             dim=0,
         )
 
-    return torch.stack(split_line_token_ids)
+    return torch.stack(split_line_token_ids), offsets
 
 
-def _get_defect_prob(true_prob: list[list[float]]) -> list[float]:
+T = TypeVar("T")
+
+
+def _discard_redundancy(true_prob: list[T]) -> list[T]:
     """
     :param true_prob: contains the probability of each line in each split being a defect.
     Here, each file is split into multiple splits of 256 lines each with 64 lines overlap.
@@ -125,3 +150,32 @@ def _get_defect_prob(true_prob: list[list[float]]) -> list[float]:
         defect_prob.extend(split[32:-32])
     defect_prob.extend(true_prob[-1][:-32])
     return defect_prob
+
+
+def _compute_attn_for_tokens(attentions, batch_size):
+    # attention_by_file is a list[Tensor]
+    #    where each tensor is of shape
+    #    (num_layers=6, file_length=512, num_heads, seq_len, seq_len)
+    #    and the list is of length batch_size
+    attention_by_file = [torch.stack(attention) for attention in attentions]
+
+    # However, if the model is running on N GPUs, len(attention_by_file) will be
+    # batch_size / N and the second dimension in each attention will be
+    # (file_length * N) instead of file_length. Thus, we will split that dimension
+    # into N parts and append them to the first dimension.
+    if len(attention_by_file) < batch_size:
+        attention_by_file = [
+            split
+            for attention in attention_by_file
+            for split in torch.split(attention, MAX_FILE_LEN, dim=1)
+        ]
+    # reduce attention dimensions
+    attention_by_file = [
+        attention.mean(dim=(0, 2, 3)) for attention in attention_by_file
+    ]
+
+    assert all(
+        attention.shape == (MAX_FILE_LEN, MAX_LINE_LEN)
+        for attention in attention_by_file
+    ), [attention.shape for attention in attention_by_file]
+    return attention_by_file
