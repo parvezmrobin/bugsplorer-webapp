@@ -81,8 +81,8 @@
               <button
                 type="button"
                 class="btn btn-warning position-relative"
-                @click="showExplanation(i)"
-              >Explain</button>
+                @click="tokenExplanationIndex === i ?clearExplanation(): showExplanation(i)"
+              >{{ tokenExplanationIndex === i ? 'Hide Explanation' : 'Explain' }}</button>
             </div>
           </template>
 
