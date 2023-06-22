@@ -37,23 +37,22 @@
             v-for="(score, i) in defectPossibilities"
             :key="i"
             class="d-block position-absolute w-100 ps-2"
-            style="height: 1.5em; left: -6em;"
+            style="height: 1.5em; left: 0;"
             :style="{
               backgroundColor: getBackgroundColor(score, i),
               top: `${i * 1.5 + 1}em`
             }"
-          >
-            {{ (i + 1).toString(10).padStart(3) }}
-            <template v-if="tokenExplanationIndex === i">
+          >{{ (i + 1).toString(10).padStart(3) }}
+            <template v-if="tokenExplanationIndices.includes(i)">
               <span
-                v-for="tokenExplanation in tokenExplanations"
+                v-for="tokenExplanation in tokenExplanations[i]"
                 :key="tokenExplanation.start"
                 class="position-absolute"
                 style="top: 0; height: 1.5em;"
                 :style="{
                   width: `${tokenExplanation.width/2}rem`,
                   backgroundColor: `rgba(255, 65, 90, ${tokenExplanation.strength})`,
-                  left: `${tokenExplanation.start/2.1 + 8}rem`}"
+                  left: `${tokenExplanation.start/2.1 + 2.75}rem`}"
               />
             </template>
 
@@ -81,8 +80,8 @@
               <button
                 type="button"
                 class="btn btn-warning position-relative"
-                @click="tokenExplanationIndex === i ?clearExplanation(): showExplanation(i)"
-              >{{ tokenExplanationIndex === i ? 'Hide Explanation' : 'Explain' }}</button>
+                @click="tokenExplanationIndices.includes(i) ? clearExplanation(): showExplanation(i)"
+              >{{ tokenExplanationIndices.includes(i) ? "Hide Explanation" : "Explain" }}</button>
             </div>
           </template>
 
@@ -123,13 +122,13 @@ const language = ref<string>("");
 const defectPossibilities = ref<number[]>([]);
 const attentions = ref<number[][]>([]);
 const offests = ref<number[][]>([]);
-const tokenExplanationIndex = ref(-1);
+const tokenExplanationIndices = ref<number[]>([]);
 type TokenExplanation = {
   start: number;
   width: number;
   strength: number;
 };
-const tokenExplanations = ref<TokenExplanation[]>([]);
+const tokenExplanations = ref<Record<number, TokenExplanation[]>>([]);
 
 const minDefectPossibility = computed(() =>
   Math.min(...defectPossibilities.value)
@@ -143,7 +142,7 @@ function resetStates() {
   defectPossibilities.value = [];
   attentions.value = [];
   offests.value = [];
-  tokenExplanationIndex.value = -1;
+  tokenExplanationIndices.value = [];
   tokenExplanations.value = [];
 }
 
@@ -198,7 +197,7 @@ async function updateDefectPossibilities() {
 
 function getBackgroundColor(score: number, i: number) {
   let opacity: number;
-  if (i === tokenExplanationIndex.value) {
+  if (tokenExplanationIndices.value.includes(i)) {
     opacity = 0;
   } else {
     opacity =
@@ -215,25 +214,37 @@ function isAboveThreshold(score: number) {
 }
 
 function showExplanation(index: number) {
-  tokenExplanationIndex.value = index;
+  tokenExplanationIndices.value = [];
+  for (
+    let i = index;
+    i < defectPossibilities.value.length &&
+    defectPossibilities.value[i] === defectPossibilities.value[index];
+    i++
+  ) {
+    tokenExplanationIndices.value.push(i);
+  }
 
-  const attention = attentions.value[index];
-  const offset = offests.value[index];
-  const minTokenAttn = Math.min(...attention);
-  const maxTokenAttn = Math.max(...attention);
-  tokenExplanations.value = Array(offset.length - 1)
-    .fill(0)
-    .map((_, i) => {
-      const start = offset[i][0];
-      const end = offset[i][1];
-      const width = Math.max(end - start, 0);
-      const strength = attention[i] / (maxTokenAttn - minTokenAttn);
-      return { start, width, strength };
-    });
+  tokenExplanations.value = {};
+  for (const index of tokenExplanationIndices.value) {
+    const lineAttention = attentions.value[index];
+    const lineOffset = offests.value[index];
+    const minTokenAttn = Math.min(...lineAttention);
+    const maxTokenAttn = Math.max(...lineAttention);
+
+    tokenExplanations.value[index] = Array(lineOffset.length - 1)
+      .fill(0)
+      .map((_, i) => {
+        const start = lineOffset[i][0];
+        const end = lineOffset[i][1];
+        const width = Math.max(end - start, 0);
+        const strength = lineAttention[i] / (maxTokenAttn - minTokenAttn);
+        return { start, width, strength };
+      });
+  }
 }
 
 function clearExplanation() {
-  tokenExplanationIndex.value = -1;
+  tokenExplanationIndices.value = [];
   tokenExplanations.value = [];
 }
 </script>
