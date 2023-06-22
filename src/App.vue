@@ -42,21 +42,21 @@
               backgroundColor: getBackgroundColor(score, i),
               top: `${i * 1.5 + 1}em`
             }"
-          >{{ (i + 1).toString(10).padStart(3) }}
-            <template v-if="tokenExplanationIndices.includes(i)">
+          >{{
+              (i + 1).toString(10).padStart(3)
+            }}<template v-if="tokenExplanationIndices.includes(i)">
               <span
                 v-for="tokenExplanation in tokenExplanations[i]"
                 :key="tokenExplanation.start"
                 class="position-absolute"
                 style="top: 0; height: 1.5em;"
+                :data-attn="tokenExplanation.strength"
                 :style="{
                   width: `${tokenExplanation.width/2}rem`,
-                  backgroundColor: `rgba(255, 65, 90, ${tokenExplanation.strength})`,
+                  backgroundColor: makeTokenColor(tokenExplanation.strength),
                   left: `${tokenExplanation.start/2.1 + 2.75}rem`}"
               />
-            </template>
-
-          </span>
+            </template></span>
 
           <code
             ref="fileContentEl"
@@ -106,12 +106,35 @@
       <button>Okay</button>
     </form>
   </dialog>
+
+  <div
+    v-if="tokenExplanationIndices.length > 0"
+    class="d-flex w-100 position-fixed"
+    style="bottom: 0; left: 0"
+  >
+    <div
+      v-for="i in 100"
+      :key="i"
+      style="height: 1em; width: 1%"
+      :style="{
+        backgroundColor: getBrighterColor(colors[i - 1]),
+      }"
+    ></div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import hljs from "highlight.js";
 import axios from "axios";
+import createColormap from "colormap";
+
+const colors = createColormap({
+  colormap: "jet",
+  nshades: 100,
+  format: "rgba",
+  alpha: 0.5,
+});
 
 const fileContentEl = ref<HTMLElement | null>(null);
 const fileContent = ref<string>("");
@@ -224,12 +247,17 @@ function showExplanation(index: number) {
     tokenExplanationIndices.value.push(i);
   }
 
+  const allSelectedAttention = tokenExplanationIndices.value
+    .map((i) => attentions.value[i])
+    .flat()
+    .filter(Boolean);
+  const minTokenAttn = Math.min(...allSelectedAttention);
+  const maxTokenAttn = Math.max(...allSelectedAttention);
+
   tokenExplanations.value = {};
   for (const index of tokenExplanationIndices.value) {
     const lineAttention = attentions.value[index];
     const lineOffset = offests.value[index];
-    const minTokenAttn = Math.min(...lineAttention);
-    const maxTokenAttn = Math.max(...lineAttention);
 
     tokenExplanations.value[index] = Array(lineOffset.length - 1)
       .fill(0)
@@ -237,7 +265,8 @@ function showExplanation(index: number) {
         const start = lineOffset[i][0];
         const end = lineOffset[i][1];
         const width = Math.max(end - start, 0);
-        const strength = lineAttention[i] / (maxTokenAttn - minTokenAttn);
+        const strength =
+          (lineAttention[i] - minTokenAttn) / (maxTokenAttn - minTokenAttn);
         return { start, width, strength };
       });
   }
@@ -246,6 +275,34 @@ function showExplanation(index: number) {
 function clearExplanation() {
   tokenExplanationIndices.value = [];
   tokenExplanations.value = [];
+}
+
+const adder = 92;
+
+function getBrighterComp(r: number) {
+  return Math.min(r + adder, 255);
+}
+
+function getBrighterColor(color: [number, number, number, number]) {
+  const [r, g, b] = color;
+  const lighter = `rgb(${getBrighterComp(r)}, ${getBrighterComp(
+    g
+  )}, ${getBrighterComp(b)})`;
+  return lighter;
+}
+
+/**
+ * Get color from {@link colors} using {@link strength} as index.
+ * Then make the color brighter and return as a string.
+ * @param strength
+ */
+function makeTokenColor(strength: number) {
+  if (strength < 0) {
+    return "transparent";
+  }
+  const color = colors[Math.min(Math.floor(strength * 100), 99)];
+  const lighter = getBrighterColor(color);
+  return lighter;
 }
 </script>
 

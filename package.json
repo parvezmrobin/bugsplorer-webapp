@@ -14,11 +14,13 @@
     "@popperjs/core": "^2.11.8",
     "axios": "^1.4.0",
     "bootstrap": "^5.3.0",
+    "colormap": "^2.3.2",
     "highlight.js": "^11.3.1",
     "sass": "^1.63.4",
     "vue": "^3.2.47"
   },
   "devDependencies": {
+    "@types/colormap": "^2.3.1",
     "@types/node": "^20.3.1",
     "@typescript-eslint/eslint-plugin": "^5.59.11",
     "@typescript-eslint/parser": "^5.59.11",
